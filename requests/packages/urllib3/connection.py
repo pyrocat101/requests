@@ -1,11 +1,12 @@
 import sys
 import socket
+import time
 from socket import timeout as SocketTimeout
 
 try:  # Python 3
-    from http.client import HTTPConnection as _HTTPConnection, HTTPException
+    from http.client import HTTPConnection as _HTTPConnection, HTTPResponse, HTTPException
 except ImportError:
-    from httplib import HTTPConnection as _HTTPConnection, HTTPException
+    from httplib import HTTPConnection as _HTTPConnection, HTTPResponse, HTTPException
 
 
 class DummyConnection(object):
@@ -46,7 +47,96 @@ port_by_scheme = {
 }
 
 
-class HTTPConnection(_HTTPConnection, object):
+class TimedSocketFile(object):
+    def __init__(self, fp):
+        self.fp = fp
+        self.sock = fp._sock
+        self.timeout = self.sock.gettimeout()
+        self._start_response = None
+
+    def start_response(self):
+        self._start_response = time.time()
+
+    def _validate_ttl(self):
+        if self.timeout is not None:
+            elapsed = time.time() - self._start_response
+            if elapsed > self.timeout:
+                self.sock.close()
+                raise socket.timeout
+            self.sock.settimeout(max(self.timeout - elapsed, 0.0))
+
+    @property
+    def bufsize(self):
+        return self.fp.bufsize
+
+    def close(self):
+        self.fp.close()
+
+    @property
+    def closed(self):
+        return self.fp.closed
+
+    @property
+    def default_bufsize(self):
+        return self.fp.default_bufsize
+
+    def fileno(self):
+        return self.fp.fileno
+
+    def flush(self):
+        return self.fp.flush()
+
+    @property
+    def mode(self):
+        return self.fp.mode
+
+    @property
+    def name(self):
+        return self.fp.name
+
+    def next(self):
+        return self.fp.next()
+
+    def read(self, *args, **kwargs):
+        self._validate_ttl()
+        return self.fp.read(*args, **kwargs)
+
+    def readline(self, *args, **kwargs):
+        self._validate_ttl()
+        return self.fp.readline(*args, **kwargs)
+
+    def readlines(self, *args, **kwargs):
+        self._validate_ttl()
+        return self.fp.readlines(*args, **kwargs)
+
+    @property
+    def softspace(self):
+        return self.fp.softspace
+
+    def write(self, *args, **kwargs):
+        self._validate_ttl()
+        return self.fp.write(*args, **kwargs)
+
+    def writelines(self, *args, **kwargs):
+        self._validate_ttl()
+        return self.fp.writelines(*args, **kwargs)
+
+
+class TimedHTTPResponse(HTTPResponse, object):
+    def __init__(self, *args, **kwargs):
+        super(TimedHTTPResponse, self).__init__(*args, **kwargs)
+        self.fp = TimedSocketFile(self.fp)
+
+    def begin(self):
+        self.fp.start_response()
+        super(TimedHTTPResponse, self).begin()
+
+
+class TimedHTTPConnection(_HTTPConnection, object):
+    response_class = TimedHTTPResponse
+
+
+class HTTPConnection(TimedHTTPConnection):
     """
     Based on httplib.HTTPConnection but provides an extra constructor
     backwards-compatibility layer between older and newer Pythons.

@@ -1,3 +1,9 @@
+This fork of requests honors timeout as "hard" limit. Previously, requests'
+timeout is the timeout per low-level socket operation, whereas timeout in this
+fork is the maximum time allowed to fulfill the request. This feature is
+particularly useful if you have to limit the time spent on synchronous HTTP
+requests.
+
 Requests: HTTP for Humans
 =========================
 
