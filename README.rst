@@ -4,6 +4,10 @@ fork is the maximum time allowed to fulfill the request. This feature is
 particularly useful if you have to limit the time spent on synchronous HTTP
 requests.
 
+**Caveat:** the underlying name resolution is a blocking operation and thus
+cannot be controlled by timeout without replacing it with their async
+counterpart (e.g. c-ares).
+
 Requests: HTTP for Humans
 =========================
 
